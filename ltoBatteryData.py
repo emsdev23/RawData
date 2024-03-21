@@ -1,4 +1,3 @@
-# 
 import socket
 import struct
 from datetime import datetime
@@ -34,44 +33,137 @@ while True:
             client_socket.connect((server_ip, server_port))
         except:
             time.sleep(10)
-            continue
-        
-        unprocesseddb = mysql.connector.connect(
-            host="121.242.232.151",
-            user="ltouser",
-            password="ltouser@151",
-            database='bmsmgmtprodv13',
-            port=3306
-        )
+            continue 
 
-        # unprocesseddb = mysql.connector.connect(
-        #         host="121.242.232.211",
-        #         user="emsroot",
-        #         password="22@teneT",
-        #         database='EMS',
-        #         port=3306
-        #     )
+        unprocesseddb = mysql.connector.connect(
+                    host="121.242.232.151",
+                    user="ltouser",
+                    password="ltouser@151",
+                    database='bmsmgmtprodv13',
+                    port=3306
+                )
+
 
         ltocur = unprocesseddb.cursor()
-
-        # Receive the response from the server
-        response = client_socket.recv(10240) 
-
-        hex_string = ' '.join(f"{byte:02X}" for byte in response)
-
-        print(hex_string)
         
+        batteryStsDict = {}
+        batteryli = []
+        def ltoBattery(clean_li,rectime):
+                    # print(clean_li)
+            try:
+                batteryVolt = clean_li[1] + clean_li[0]
+                batteryVolt = int(batteryVolt,16)/10
+            except Exception as ex:
+                        # print(ex)
+                batteryVolt = None
+                    
+            try:
+                batteryCurent = clean_li[3] + clean_li[2]
+                batteryCurent = int(batteryCurent,16) / 100
+            except:
+                batteryCurent = None
+
+                    # print("bat cur",batteryCurent)
+            try:
+                mainConsSts = clean_li[4][1]
+                preConSts = clean_li[4][0]
+                        # print("main sts",mainConsSts)
+                        # print("prests",preConSts)
+            except:
+                mainConsSts = None
+                preConSts = None
+
+            try:
+                batterySts = clean_li[5][1]
+                        # print(batteryCurent)
+                                # CHG -> 3 , DCHG -> 2 ,
+                        # print("sts",batterySts)
+                if batterySts == '2':
+                    batterySts = 'IDLE'
+                elif batterySts == '3':
+                    if batteryCurent > 3:
+                        batterySts = 'CHG'
+                    else:
+                        batterySts = 'IDLE'
+                elif batterySts == '4':
+                            # print(batteryCurent)
+                    if batteryCurent > 3:
+                        batterySts = 'DCHG'
+                    else:
+                        batterySts = 'IDLE'
+                elif batterySts == '5':
+                    batterySts = 'FAULT'
+                    
+            except:
+                    batterySts = None
+                    
+            try:
+                packSoc = clean_li[6]
+                packSoc = int(packSoc,16)
+            except:
+                packSoc = None
+                    
+            try:
+                usableSoc = int(clean_li[7],16)
+                print(usableSoc)
+            except:
+                usableSoc = None
+                    
+            batteryStsDict['batteryVolt'] = batteryVolt
+            batteryStsDict['batteryCurent']  = batteryCurent
+            batteryStsDict['mainConsSts'] = mainConsSts
+            batteryStsDict['preConSts'] = preConSts
+            batteryStsDict['batterySts'] = batterySts
+            batteryStsDict['packSoc'] = packSoc
+            batteryStsDict['usableSoc'] = usableSoc
+
+                    # print(rectime[0:17])
+
+            try:
+                if int(rectime[17:]) >= 0  and int(rectime[17:]) < 15:
+                    batteryStsDict['rectime']=rectime[0:17]+"00"
+                elif int(rectime[17:]) >= 15   and int(rectime[17:]) < 30:
+                    batteryStsDict['rectime']=rectime[0:17]+"15"
+                elif int(rectime[17:]) >= 30  and int(rectime[17:]) < 45:
+                    batteryStsDict['rectime']=rectime[0:17]+"30"
+                elif int(rectime[17:]) >= 45  and int(rectime[17:]) < 59:
+                    batteryStsDict['rectime']=rectime[0:17]+"45"
+            except:
+                curtime = datetime.now()
+                ltoBattery(clean_li,curtime)
+
+        def convertLTO(cleaned_li):
+            # print('volts',cleaned_li)
+            if cleaned_li[0] == "13":
+                now = datetime.now()
+                ltoBatteryEnergy(cleaned_li[3:],str(now)[0:-7])
+            if cleaned_li[0] == "03":
+                now = datetime.now()
+                ltoBattery(cleaned_li[3:],str(now)[0:-7])
+
+
+        def clean_resp(raw_li):
+            li = []
+            order_li = raw_li.split(" ")
+            for i in order_li:
+                if len(i) > 1:
+                    li.append(i)
+                if len(li) > 1:
+                    convertLTO(li)
+
         chgstsli = []
         def ltoBatteryEnergy(clean_li,rectime):
             try:
                 chargingEnergy = clean_li[1]+clean_li[0]
-                chargingEnergy = int(chargingEnergy,16) / 100
+                        # print(chargingEnergy)
+                chargingEnergy = int(chargingEnergy,16)
             except:
                 chargingEnergy =  None
 
             try:
                 dischargingEnergy = clean_li[3]+clean_li[2]
-                dischargingEnergy = int(dischargingEnergy,16) / 100
+                        # print(dischargingEnergy)
+                dischargingEnergy = int(dischargingEnergy,16)
             except:
                 dischargingEnergy = None
 
@@ -84,147 +176,76 @@ while True:
             chgstsli.append(chargingEnergy)
             chgstsli.append(dischargingEnergy)
             chgstsli.append(availableEnergy)
-        
-        batteryli = []
-        def ltoBattery(clean_li,rectime):
-            # print(clean_li)
-            try:
-                batteryVolt = clean_li[1] + clean_li[0]
-                batteryVolt = int(batteryVolt,16)/10
-            except:
-                batteryVolt = None
-            
-            try:
-                batteryCurent = clean_li[3] + clean_li[2]
-                batteryCurent = int(batteryCurent,16) / 100
-            except:
-                batteryCurent = None
 
-            try:
-                mainConsSts = clean_li[4][0]
-                preConSts = clean_li[4][1]
-                # print("main sts",mainConsSts)
-                # print("prests",preConSts)
-            except:
-                mainConsSts = None
-                preConSts = None
+            batteryStsDict['chargingEnergy'] = chargingEnergy
+            batteryStsDict['dischargingEnergy'] = dischargingEnergy
+            batteryStsDict['availableEnergy'] = availableEnergy
 
-            try:
-                batterySts = clean_li[5][0]
-                # print(batteryCurent)
-                # CHG -> 3 , DCHG -> 2 ,
-                # print(batterySts)
-                if batterySts == '2':
-                    batterySts = 'IDLE'
-                elif batterySts == '3':
-                    batterySts = 'CHG'
-                elif batterySts == '4':
-                    if batteryCurent > 3:
-                        batterySts = 'DCHG'
-                    else:
-                        batterySts = 'IDLE'
-                elif batterySts == '5':
-                    batterySts = 'FAULT'
-            
-            except:
-                batterySts = None
-            
-            try:
-                packSoc = clean_li[6]
-                packSoc = int(packSoc,16)
-            except:
-                packSoc = None
-            
-            try:
-                usableSoc = int(clean_li[7],16)
-            except:
-                usableSoc = None
-            
-            batteryli.append(batteryVolt)
-            batteryli.append(batteryCurent)
-            batteryli.append(mainConsSts)
-            batteryli.append(preConSts)
-            batteryli.append(batterySts)
-            batteryli.append(packSoc)
-            batteryli.append(usableSoc)
-            batteryli.append(rectime)
-            # print(batteryli)
-            # print(chgstsli)
-            # print(batteryCurent)
-            # print((batteryVolt,batteryCurent,mainConsSts,preConSts,batterySts,packSoc,usableSoc,rectime))
-        
-        def convertLTO(cleaned_li):
-            if cleaned_li[1] == "13":
-                # print(cleaned_li[0:4])
+        def convertLTOer(cleaned_li):
+            if cleaned_li[0] == "13":
+                        # print(cleaned_li[3:])
                 now = datetime.now()
-                ltoBatteryEnergy(cleaned_li[4:],str(now)[0:-7])
-            if cleaned_li[1] == "03":
+                ltoBatteryEnergy(cleaned_li[3:],str(now)[0:-7])
+            if cleaned_li[0] == "03":
                 now = datetime.now()
-                ltoBattery(cleaned_li[4:],str(now)[0:-7])
- 
-        def clean_resp(raw_li):
+                ltoBattery(cleaned_li[3:],str(now)[0:-7])
+
+        def clean_resper(raw_li):
             li = []
             order_li = raw_li.split(" ")
             for i in order_li:
                 if len(i) > 1:
                     li.append(i)
-            if len(li) > 1:
-                # print(li)
-                convertLTO(li)
-        
-        initial_li = hex_string.split('88')
+                if len(li) > 1:
+                    # print(li)
+                    convertLTOer(li)
 
-        for i in initial_li:
-            clean_resp(i)
-        
-        # finli = chgstsli + batteryli
-        # print(finli)
-        if len(batteryli) >= 8:
-            batVoltage = batteryli[0]
-            batCurrent = batteryli[1]
-            mainCon = batteryli[2]
-            preCon = batteryli[3]
-            batSts = batteryli[4]
-            packSoc = batteryli[5]
-            usableSoc = batteryli[6]
-            received_time = batteryli[7]
+        response1 = client_socket.recv(10240)
 
-            sql = "INSERT INTO ltoBatteryData(batteryVoltage,batteryCurrent,mainContactorStatus,prechargeContactorStatus,batteryStatus,packSOC,packUsableSOC,recordTimestamp) values(%s,%s,%s,%s,%s,%s,%s,%s)"
-            val = (batVoltage,batCurrent,mainCon,preCon,batSts,packSoc,usableSoc,received_time)
-            print(val)
-            try:
-                ltocur.execute(sql,val)
-                unprocesseddb.commit()
+        hex_string = ' '.join(f"{byte:02X}" for byte in response1)
+
+        initial_li = hex_data.split('88 18')
+
+        if len(initial_li) > 0:
+
+            for i in initial_li:
+                print(i)
+                clean_resper(i)
+
+        response2 = client_socket.recv(10240)
+
+        hex_data2 = ' '.join(f"{byte:02X}" for byte in response2)
+
+        initial_li1 = hex_data2.split('88 18')
+
+        if len(initial_li1) > 0:
+            for i in initial_li1:
+                print(i)
+                clean_resper(i)
+
+
+        print(batteryStsDict)
+
+        try:
+            val = (batteryStsDict['batteryVolt'],batteryStsDict['batteryCurent'],batteryStsDict['mainConsSts'],batteryStsDict['preConSts'],batteryStsDict['batterySts'],batteryStsDict['packSoc'],batteryStsDict['usableSoc'],batteryStsDict['chargingEnergy'],batteryStsDict['dischargingEnergy'],batteryStsDict['availableEnergy'],batteryStsDict['rectime'])
+        except Exception as ex:
+            print(ex)
+            ltocur.close()
+            continue
+        sql = "INSERT INTO ltoBatteryData(batteryVoltage,batteryCurrent,mainContactorStatus,prechargeContactorStatus,batteryStatus,packSOC,packUsableSOC,chargingEnergy,dischargingEnergy,availableEnergy,recordTimestamp) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+        print(val)
+        try:
+            ltocur.execute(sql,val)
+            unprocesseddb.commit()
                 # print(val)
-                print("LTO Battery data inserted")
-            except Exception as ex:
-                print("Data not inserted")
-                print(ex)
-
-        # print(chgstsli)
-        if len(chgstsli) >= 3:
-            # print(finli)
-            chgEnergy = chgstsli[0] / 100
-            dchgEnergy = chgstsli[1] / 100
-            availEnergy = chgstsli[2] / 100
-
-            #chargingEnergy,dischargingEnergy,availableEnergy
-            #chgEnergy,dchgEnergy,availEnergy
-            
-            sql = "INSERT INTO ltoBatteryData(chargingEnergy,dischargingEnergy,availableEnergy,recordTimestamp) values(%s,%s,%s,%s)"
-            val = (chgEnergy,dchgEnergy,availEnergy,received_time)
-            try:
-                ltocur.execute(sql,val)
-                unprocesseddb.commit()
-                print(val)
-                print("LTO Battery data inserted")
-            except mysql.connector.errors.IntegrityError:
-                sql = "update ltoBatteryData SET chargingEnergy = %s,dischargingEnergy = %s,availableEnergy = %s where recordTimestamp = %s"
-                val = (chgEnergy,dchgEnergy,availEnergy,received_time)
-                ltocur.execute(sql,val)
-                unprocesseddb.commit()
-                print(val)
-                print("LTO battery data inserted")
+            print("LTO Battery data inserted")
+            ltocur.close()
+            unprocesseddb.close()
+        except Exception as ex:
+            print("Data not inserted")
+            print(ex)
+        
+        
 
     finally:
         # Close the socket
