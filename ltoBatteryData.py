@@ -4,6 +4,9 @@ from datetime import datetime
 import mysql.connector
 import time
 
+
+total_li = []
+
 while True:
     # Define the server's IP address and port
     server_ip = "10.9.244.1"  # Replace with your server's IP address
@@ -48,6 +51,20 @@ while True:
         
         batteryStsDict = {}
         batteryli = []
+
+        def filter_lists(hex_lists):
+            list_03 = []
+            list_13 = []
+
+            for inner_list in hex_lists:
+                if inner_list[0] == '03':
+                    list_03.append(inner_list)
+                elif inner_list[0] == '13':
+                    list_13.append(inner_list)
+
+            return list_03, list_13
+    
+
         def ltoBattery(clean_li,rectime):
                     # print(clean_li)
             try:
@@ -142,14 +159,6 @@ while True:
                 ltoBattery(cleaned_li[3:],str(now)[0:-7])
 
 
-        def clean_resp(raw_li):
-            li = []
-            order_li = raw_li.split(" ")
-            for i in order_li:
-                if len(i) > 1:
-                    li.append(i)
-                if len(li) > 1:
-                    convertLTO(li)
 
         chgstsli = []
         def ltoBatteryEnergy(clean_li,rectime):
@@ -183,13 +192,12 @@ while True:
 
         def convertLTOer(cleaned_li):
             if cleaned_li[0] == "13":
-                        # print(cleaned_li[3:])
                 now = datetime.now()
-                ltoBatteryEnergy(cleaned_li[3:],str(now)[0:-7])
+                total_li.append(cleaned_li)
             if cleaned_li[0] == "03":
                 now = datetime.now()
-                ltoBattery(cleaned_li[3:],str(now)[0:-7])
-
+                total_li.append(cleaned_li)
+        
         def clean_resper(raw_li):
             li = []
             order_li = raw_li.split(" ")
@@ -223,6 +231,14 @@ while True:
                 print(i)
                 clean_resper(i)
 
+        if len(total_li)> 2:
+            list_03, list_13 = filter_lists(total_li)
+
+            if len(list_03)>0 and len(list_13) > 0:
+                now = str(datetime.now())[0:-7]
+                ltoBattery(list_03[0][3:],now)
+                ltoBatteryEnergy(list_13[0][3:],now)
+
 
         print(batteryStsDict)
 
@@ -252,4 +268,3 @@ while True:
         client_socket.close()
 
     time.sleep(14)
-    
